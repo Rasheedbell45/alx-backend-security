@@ -7,7 +7,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 
-    # 👇 Add your custom middleware
     "ip_tracking.middleware.RequestLoggingMiddleware",
 ]
 

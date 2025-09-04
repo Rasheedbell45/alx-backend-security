@@ -1,5 +1,7 @@
 from django.http import HttpResponseForbidden
 from django.utils.deprecation import MiddlewareMixin
+from django.core.cache import cache
+from ipgeolocation import IpGeoLocation
 from .models import RequestLog, BlockedIP
 import logging
 
@@ -16,11 +18,30 @@ class RequestLoggingMiddleware(MiddlewareMixin):
             logger.warning(f"Blocked request from {ip} to {path}")
             return HttpResponseForbidden("Your IP is blocked.")
 
+        # Get geolocation (cached for 24h)
+        geo_data = cache.get(f"geo_{ip}")
+        if not geo_data:
+            try:
+                geo = IpGeoLocation(ip)
+                geo_data = {
+                    "country": geo.country_name or "",
+                    "city": geo.city or "",
+                }
+                cache.set(f"geo_{ip}", geo_data, timeout=60 * 60 * 24)  # 24 hours
+            except Exception as e:
+                logger.error(f"Geolocation lookup failed for {ip}: {e}")
+                geo_data = {"country": "", "city": ""}
+
         # Save request to DB
-        RequestLog.objects.create(ip_address=ip, path=path)
+        RequestLog.objects.create(
+            ip_address=ip,
+            path=path,
+            country=geo_data["country"],
+            city=geo_data["city"],
+        )
 
         # Log to console/file
-        logger.info(f"Request from {ip} to {path}")
+        logger.info(f"Request from {ip} ({geo_data['country']}, {geo_data['city']}) to {path}")
 
     def get_client_ip(self, request):
         """Retrieve client IP address from headers or META."""
